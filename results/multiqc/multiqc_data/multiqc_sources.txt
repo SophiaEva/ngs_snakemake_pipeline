@@ -1,0 +1,4 @@
+Module	Section	Sample Name	Source
+FastQC	all_sections	A	/home/soph/snakemake/results/fastqc/A_fastqc.zip
+FastQC	all_sections	B	/home/soph/snakemake/results/fastqc/B_fastqc.zip
+FastQC	all_sections	C	/home/soph/snakemake/results/fastqc/C_fastqc.zip

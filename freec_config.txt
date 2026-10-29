@@ -1,0 +1,30 @@
+#Control Freec
+
+[general]
+chrLenFile = /home/soph/prototype_01/02_Common_files/test_panel.fa.fai
+window = 0
+ploidy = 2, 3
+outputDir = /home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/NA19913/Control_Freec
+
+breakPointType=2
+chrFiles = /home/soph/prototype_01/02_Common_files/
+
+maxThreads=2
+
+breakPointThreshold=1.2
+noisyData=TRUE
+printNA=FALSE
+
+readCountThreshold=50
+
+[sample]
+
+mateFile = /home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/NA19913/NA19913_ERR250256/NA19913_ERR250256_raw.sorted.dedup.bam
+inputFormat = BAM
+mateOrientation = 0
+
+[target]
+
+captureRegions = /home/soph/prototype_01/02_Common_files/test_panel_v3.bed
+
+

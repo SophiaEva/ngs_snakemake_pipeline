@@ -1,0 +1,4 @@
+bam_dir: "/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/NA19913/NA19913_ERR250256"
+output_dir: "/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/NA19913/mosdepth"
+threads: 4
+bed_file: "/home/soph/prototype_01/02_Common_files/test_panel_v3.bed"

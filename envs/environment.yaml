@@ -1,0 +1,9 @@
+name: snakemake_variant
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - snakemake-minimal >=9.7.1
+  - jinja2
+  - fastqc
+  - multiqc

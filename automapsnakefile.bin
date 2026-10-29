@@ -1,0 +1,41 @@
+# Snakefile: automapsnakefile.bin
+
+samples_csv: "/home/soph/prototype_01/02_Common_files/automap_samples.csv"
+genome: "hg38"
+automap: "/home/soph/prototype_01/01_Script_AllTools/AutoMap/AutoMap_v1.3.sh"
+
+import pandas as pd
+import os
+
+# Read sample info
+SAMPLES_DF = pd.read_csv(config["samples_csv"])
+
+# Create dictionaries for input VCFs and output directories
+VCFS = dict(zip(SAMPLES_DF["sample"], SAMPLES_DF["vcf"]))
+OUTDIRS = dict(zip(SAMPLES_DF["sample"], SAMPLES_DF["outdir"]))
+
+# All rule
+rule all:
+    input:
+        expand(
+            "{outdir}/{sample}.HomRegions.tsv",
+            sample=SAMPLES_DF["sample"],
+            outdir=SAMPLES_DF["outdir"]
+        )
+
+# Run AutoMap rule
+rule run_automap:
+    input:
+        vcf=lambda wildcards: VCFS[wildcards.sample]
+    output:
+        "{outdir}/{sample}.HomRegions.tsv"
+    params:
+        outdir=lambda wildcards: OUTDIRS[wildcards.sample],
+        genome=config["genome"],
+        automap=config["automap"]
+    shell:
+        """
+        mkdir -p {params.outdir}
+        bash {params.automap} --vcf {input.vcf} --out {params.outdir} --genome {params.genome}
+        """
+

@@ -1,0 +1,4 @@
+Sample	Unique Reads	Duplicate Reads
+A	24946.0	54.0
+B	24944.0	56.0
+C	24944.0	56.0

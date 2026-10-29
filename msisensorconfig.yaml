@@ -1,0 +1,6 @@
+msisensor_bin: "/home/soph/prototype_01/01_Script_AllTools/MSISensor/msisensor.linux"
+ref_fasta: "/home/soph/prototype_01/02_Common_files/hg38.fa" 
+bam_path: "/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/MSISensor_Samples_Testing/{sample}.bam"
+msi_baseline: "/home/soph/prototype_01/02_Common_files/microsatellites.list"
+output_prefix: "/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/{sample}/MSISensor/{sample}"
+log_dir: "/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/logs/msisensor"

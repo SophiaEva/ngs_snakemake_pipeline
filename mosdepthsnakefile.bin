@@ -1,0 +1,59 @@
+import os
+import glob
+
+# config file
+configfile: "mosdepthconfig.yaml"
+
+bam_dir = config["bam_dir"]
+output_dir = config["output_dir"]
+default_threads = config.get("threads", 4)
+bed_file = config["bed_file"]
+
+bam_files = glob.glob(os.path.join(bam_dir, "*.sorted.dedup.bam"))
+samples = [os.path.basename(bam).replace(".sorted.dedup.bam", "") for bam in bam_files]
+
+rule all:
+    input:
+        expand(f"{output_dir}/{{sample}}.thresholds.coverage_stats.tsv", sample=samples)
+
+rule run_mosdepth:
+    input:
+        bam = lambda wc: os.path.join(bam_dir, f"{wc.sample}.sorted.dedup.bam"),
+        bai = lambda wc: os.path.join(bam_dir, f"{wc.sample}.sorted.dedup.bam.bai"),
+        bed = bed_file
+    output:
+        summary = os.path.join(output_dir, "{sample}.mosdepth.summary.txt"),
+        coverage = os.path.join(output_dir, "{sample}.mosdepth.global.dist.txt"),
+        threshold_gz = os.path.join(output_dir, "{sample}.thresholds.bed.gz"),
+        threshold_bed = os.path.join(output_dir, "{sample}.thresholds.bed")
+    threads: default_threads
+    shell:
+        """
+        mosdepth --threads {threads} \
+                 --no-per-base \
+                 --by {input.bed} \
+                 --threshold 1,20,50,100,250 \
+                 {output_dir}/{wildcards.sample} \
+                 {input.bam}
+
+        # unzip threshold output
+        gunzip -c {output.threshold_gz} > {output.threshold_bed}
+        """
+
+rule calc_threshold_stats:
+    input:
+        threshold_bed = os.path.join(output_dir, "{sample}.thresholds.bed")
+    output:
+        stats = os.path.join(output_dir, "{sample}.thresholds.coverage_stats.tsv")
+    run:
+        import pandas as pd
+        df = pd.read_csv(input.threshold_bed, sep="\t")
+
+        # bases captured
+        df["bases_captured"] = df["end"] - df["start"]
+
+        # coverage
+        for col in ["1X", "20X", "50X", "100X", "250X"]:
+            df[f"{col}_pct"] = (df[col] / df["bases_captured"]) * 100
+
+        df.to_csv(output.stats, sep="\t", index=False)

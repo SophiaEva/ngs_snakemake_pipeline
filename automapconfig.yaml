@@ -1,0 +1,4 @@
+samples_csv: "/home/soph/prototype_01/02_Common_files/automap_samples.csv"
+genome: "hg38"
+automap: "/home/soph/prototype_01/01_Script_AllTools/AutoMap/AutoMap_v1.3.sh"
+

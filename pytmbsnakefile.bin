@@ -1,0 +1,159 @@
+import os
+
+configfile: "pytmbconfig.yaml"
+
+SAMPLES, = glob_wildcards(os.path.join(config["input_directory"], "{sample}.vcf.gz"))
+
+rule all:
+    input:
+        expand(os.path.join(config["output_directory"], "{sample}_pyTMB.log"), sample=SAMPLES),
+        expand(os.path.join(config["output_directory"], "{sample}_tmb_final.csv"), sample=SAMPLES)
+
+rule rename_chromosomes:
+    input:
+        vcf = os.path.join(config["input_directory"], "{sample}.vcf.gz"),
+        fasta = config["references"]["genome_fasta"]
+    output:
+        renamed_vcf = temp(os.path.join(config["output_directory"], "temp/{sample}_renamed.vcf"))
+    shell:
+        """
+        #check if prefix is chrN or N
+        if head -n 1 {input.fasta} | grep -q "^>chr"; then
+            REF_HAS_CHR="yes"
+        else
+            REF_HAS_CHR="no"
+        fi
+
+        first_chrom=$(bcftools query -f '%CHROM\\n' {input.vcf} | head -n 1)
+        if [[ $first_chrom == chr* ]]; then
+            VCF_HAS_CHR="yes"
+        else
+            VCF_HAS_CHR="no"
+        fi
+
+        if [ "$REF_HAS_CHR" == "yes" ] && [ "$VCF_HAS_CHR" == "no" ]; then
+            echo "MT chrM" > chr_map.txt
+            for i in {{1..22}} X Y; do echo "$i chr$i" >> chr_map.txt; done
+            bcftools annotate --rename-chrs chr_map.txt -o {output.renamed_vcf} {input.vcf}
+            rm chr_map.txt
+        else
+            bcftools view {input.vcf} -o {output.renamed_vcf}
+        fi
+        """
+
+rule normalize_vcf:
+    input:
+        vcf = os.path.join(config["output_directory"], "temp/{sample}_renamed.vcf"),
+        fasta = config["references"]["genome_fasta"]
+    output:
+        norm_vcf = temp(os.path.join(config["output_directory"], "temp/{sample}_norm.vcf"))
+    shell:
+        """
+        bcftools norm -f {input.fasta} -m- -o {output.norm_vcf} {input.vcf}
+        """
+
+rule calculate_tmb:
+    input:
+        vcf = os.path.join(config["output_directory"], "temp/{sample}_norm.vcf"),
+        db_config = config["tool_configs"]["db"],
+        var_config = config["tool_configs"]["caller"]
+    output:
+        log_file = os.path.join(config["output_directory"], "{sample}_pyTMB.log"),
+        vcf_export = temp(os.path.join(config["output_directory"], "temp/{sample}_tmb.vcf"))
+    params:
+        eff_genome_size = config["tmb_params"]["eff_genome_size"],
+        maf = config["tmb_params"]["maf"],
+        min_depth = config["tmb_params"]["min_depth"],
+        min_alt_depth = config["tmb_params"]["min_alt_depth"],
+        vaf = config["tmb_params"]["vaf"]
+    shell:
+        """
+        cp {input.vcf} temp_{wildcards.sample}.vcf
+        
+        pyTMB.py \
+            -i temp_{wildcards.sample}.vcf \
+            --effGenomeSize {params.eff_genome_size} \
+            --dbConfig {input.db_config} \
+            --varConfig {input.var_config} \
+            --vaf {params.vaf} \
+            --maf {params.maf} \
+            --minDepth {params.min_depth} \
+            --minAltDepth {params.min_alt_depth} \
+            --filterLowQual \
+            --filterNonCoding \
+            --filterSyn \
+            --filterPolym --polymDb 1k,gnomad \
+            --export \
+            > {output.log_file}
+
+        GENERATED_FILE="temp_{wildcards.sample}_export.vcf.gz"
+
+        if [ -f "$GENERATED_FILE" ]; then
+            gunzip -c "$GENERATED_FILE" > {output.vcf_export}
+            rm "$GENERATED_FILE"
+        else
+            echo "CRITICAL ERROR: Output VCF not found."
+            exit 1
+        fi
+
+        rm temp_{wildcards.sample}.vcf
+        """
+
+rule parse_tmb:
+    input:
+        log_file = os.path.join(config["output_directory"], "{sample}_pyTMB.log")
+    output:
+        csv_file = os.path.join(config["output_directory"], "{sample}_tmb_final.csv")
+    params:
+        sample_id = "{sample}",
+        threshold = config["tmb_params"]["threshold"]
+    run:
+        import csv
+        import re
+
+        data = {
+            "SampleID": params.sample_id,
+            "Total_variants": "0", "Non_informative_variants": "0",
+            "Variants_after_filters": "0", "Effective_Genome_Size": "0",
+            "TMB": "0", "Status": "Error"
+        }
+
+        patterns = {
+            "Total_variants": r"Total number of variants\s*=\s*(\d+)",
+            "Non_informative_variants": r"Non-informative variants\s*=\s*(\d+)",
+            "Variants_after_filters": r"Variants after filters\s*=\s*(\d+)",
+            "Effective_Genome_Size": r"Effective Genome Size\s*=\s*(\d+)",
+            "TMB": r"^TMB\s*=\s*([\d\.]+)" 
+        }
+
+        with open(input.log_file, 'r') as f:
+            content = f.read()
+            for line in content.splitlines():
+                for key, pattern in patterns.items():
+                    match = re.search(pattern, line)
+                    if match:
+                        data[key] = match.group(1)
+        
+        try:
+            tmb_score = float(data["TMB"])
+            if tmb_score >= float(params.threshold):
+                data["Status"] = "High"
+            else:
+                data["Status"] = "Low"
+        except ValueError:
+            data["Status"] = "Error"
+
+        with open(output.csv_file, 'w', newline='') as csvfile:
+            fieldnames = ["SampleID", "Total number of variants", "Non-informative variants", 
+                          "Variants after filters", "Effective Genome Size (Base-Pair)", "TMB", "Status"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerow({
+                "SampleID": data["SampleID"],
+                "Total number of variants": data["Total_variants"],
+                "Non-informative variants": data["Non_informative_variants"],
+                "Variants after filters": data["Variants_after_filters"],
+                "Effective Genome Size (Base-Pair)": data["Effective_Genome_Size"],
+                "TMB": data["TMB"],
+                "Status": data["Status"]
+            })

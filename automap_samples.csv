@@ -1,0 +1,8 @@
+sample,vcf,outdir
+ABIR.hard-filtered,/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/VCFs/ABIR.hard-filtered.vcf,/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/VCFs/ABIR.hard-filtered
+OCD-A0012.hard-filtered,/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/VCFs/OCD-A0012.hard-filtered.vcf,/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/VCFs/OCD-A0012.hard-filtered
+OCD-A0013.hard-filtered,/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/VCFs/OCD-A0013.hard-filtered.vcf,/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/VCFs/OCD-A0013.hard-filtered
+OCD-A0015.hard-filtered,/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/VCFs/OCD-A0015.hard-filtered.vcf,/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/VCFs/OCD-A0015.hard-filtered
+OCD-A0016.hard-filtered,/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/VCFs/OCD-A0016.hard-filtered.vcf,/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/VCFs/OCD-A0016.hard-filtered
+OCD-A0017.hard-filtered,/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/VCFs/OCD-A0017.hard-filtered.vcf,/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/VCFs/OCD-A0017.hard-filtered
+OCD-A0018.hard-filtered,/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/VCFs/OCD-A0018.hard-filtered.vcf,/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/VCFs/OCD-A0018.hard-filtered

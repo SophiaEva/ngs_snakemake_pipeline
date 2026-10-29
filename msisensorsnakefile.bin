@@ -1,0 +1,42 @@
+# load config file
+configfile: "msisensorconfig.yaml"
+
+# read samples in directory
+(SAMPLES,) = glob_wildcards(config["bam_path"])
+
+rule all:
+    input:
+        expand(config["output_prefix"], sample=SAMPLES)
+        
+# will be executed only if microsatellite.lists is not available
+rule msisensor_scan:
+    input:
+        ref = config["ref_fasta"]
+    output:
+        list = config["msi_baseline"]
+    log:
+        config["log_dir"] + "/scan.log"
+    shell:
+        """
+        mkdir -p $(dirname {output.list}) $(dirname {log})
+        ( {config[msisensor_bin]} scan \
+            -d {input.ref} \
+            -o {output.list} ) &> {log}
+        """
+
+rule msisensor_msi:
+    input:
+        baseline = config["msi_baseline"],
+        bam = config["bam_path"]
+    output:
+        prefix = config["output_prefix"]
+    log:
+        config["log_dir"] + "/{sample}.msi.log"
+    shell:
+        """
+        mkdir -p $(dirname {output.prefix}) $(dirname {log})
+        ( {config[msisensor_bin]} msi \
+            -d {input.baseline} \
+            -t {input.bam} \
+            -o {output.prefix} ) &> {log}
+        """

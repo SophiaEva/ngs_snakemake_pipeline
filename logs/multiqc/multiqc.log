@@ -1,0 +1,8 @@
+
+/// MultiQC v1.30
+
+       file_search | Search path: /home/soph/snakemake/results/fastqc
+            fastqc | Found 3 reports
+     write_results | Data        : results/multiqc/multiqc_data
+     write_results | Report      : results/multiqc/multiqc_report.html
+           multiqc | MultiQC complete

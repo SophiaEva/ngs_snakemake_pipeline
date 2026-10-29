@@ -1,0 +1,17 @@
+#file paths
+input_directory: "/home/soph/prototype_01/03_Raw_Data_FastQ/OPF001_Test/testdata/cancerPanel/pf-curie_tmb/"
+output_directory: "/home/soph/prototype_01/04_Outputs_Files/OPF001_Test/cancerPanel/pf-curie_tmb/"
+references:
+  genome_fasta: "/home/soph/prototype_01/02_Common_files/hg38.fa"
+#config files
+tool_configs:
+  db: "/home/soph/prototype_01/02_Common_files/snpeff.yml"
+  caller: "/home/soph/prototype_01/02_Common_files/mutect2.yml"
+#tool parameters
+tmb_params:
+  threshold: 10.0
+  eff_genome_size: 33280000
+  maf: 0.001
+  min_depth: 20
+  min_alt_depth: 2
+  vaf: 0.05

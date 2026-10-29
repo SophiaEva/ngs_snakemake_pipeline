@@ -1,0 +1,204 @@
+import os
+import pandas as pd
+
+# loading sample sheet
+samples = pd.read_csv(config["sample_sheet"])
+SAMPLE_IDS = samples["SampleID"].tolist()
+
+rule all:
+    input:
+        expand("{output_dir}/{sample}/{sample}_somatic.filtered.vcf.gz",
+               sample=SAMPLE_IDS,
+               output_dir=config["output_dir"])
+
+rule bwa_mem:
+    input:
+        reads=lambda wc: sorted(
+            [os.path.join(config["raw_data_dir"], f)
+             for f in os.listdir(config["raw_data_dir"])
+             if f.startswith(wc.sample) and f.endswith(".fastq.gz")]
+        ),
+        ref=config["ref_genome"]
+    output:
+        temp("{output_dir}/{sample}/{sample}_raw.sam")
+    log:
+        "{output_dir}/{sample}/{sample}_bwa.log"
+    threads: config["threads"]
+    params:
+        outdir=config["output_dir"]
+    shell:
+        """
+        mkdir -p {params.outdir}/{wildcards.sample}
+        bwa mem -t {threads} -R '@RG\\tID:{wildcards.sample}\\tSM:{wildcards.sample}\\tPL:ILLUMINA' \
+            {input.ref} {input.reads} > {output} 2> {log}
+        """
+
+rule sam_to_sorted_bam:
+    input:
+        "{output_dir}/{sample}/{sample}_raw.sam"
+    output:
+        bam="{output_dir}/{sample}/{sample}_raw.sorted.bam",
+        bai="{output_dir}/{sample}/{sample}_raw.sorted.bam.bai"
+    log:
+        "{output_dir}/{sample}/{sample}_sort.log"
+    params:
+        threads=config["threads"]
+    shell:
+        """
+        samtools view -@ {params.threads} -bS {input} | \
+            samtools sort -@ {params.threads} -o {output.bam}
+        samtools index {output.bam}
+        """
+
+rule mark_duplicates:
+    input:
+        bam="{output_dir}/{sample}/{sample}_raw.sorted.bam"
+    output:
+        bam="{output_dir}/{sample}/{sample}_raw.sorted.dedup.bam",
+        bai="{output_dir}/{sample}/{sample}_raw.sorted.dedup.bam.bai",
+        metrics="{output_dir}/{sample}/{sample}_metrics.txt"
+    log:
+        "{output_dir}/{sample}/{sample}_dedup.log"
+    shell:
+        """
+        gatk MarkDuplicates -I {input.bam} -O {output.bam} -M {output.metrics} 2> {log}
+        samtools index {output.bam}
+        """
+
+rule base_recalibrator:
+    input:
+        bam = "{output_dir}/{sample}/{sample}_raw.sorted.dedup.bam",
+        ref = config["ref_genome"],
+        known_sites = config["known_sites"]
+    output:
+        table = "{output_dir}/{sample}/{sample}_recal.table"
+    log:
+        "{output_dir}/{sample}/{sample}_bqsr.log"
+    params:
+        known_sites_str = lambda wc, input: " ".join(f"--known-sites {site}" for site in input.known_sites)
+    shell:
+        """
+        gatk BaseRecalibrator \
+            -R {input.ref} \
+            -I {input.bam} \
+            {params.known_sites_str} \
+            -O {output.table} 2> {log}
+        """
+
+rule apply_bqsr:
+    input:
+        bam="{output_dir}/{sample}/{sample}_raw.sorted.dedup.bam",
+        ref=config["ref_genome"],
+        table="{output_dir}/{sample}/{sample}_recal.table"
+    output:
+        bam="{output_dir}/{sample}/{sample}_Corrected.bam",
+        bai="{output_dir}/{sample}/{sample}_Corrected.bam.bai"
+    log:
+        "{output_dir}/{sample}/{sample}_apply_bqsr.log"
+    shell:
+        """
+        gatk ApplyBQSR -R {input.ref} -I {input.bam} \
+            --bqsr-recal-file {input.table} -O {output.bam} 2> {log}
+        samtools index {output.bam}
+        """
+
+rule collect_metrics:
+    input:
+        bam="{output_dir}/{sample}/{sample}_Corrected.bam",
+        ref=config["ref_genome"]
+    output:
+        alignment="{output_dir}/{sample}/{sample}_alignment_metrics.txt",
+        insert_metrics="{output_dir}/{sample}/{sample}_insert_size_metrics.txt",
+        hist="{output_dir}/{sample}/{sample}_insert_size_histogram.pdf",
+        hs="{output_dir}/{sample}/{sample}_hs_metrics.txt"
+    params:
+        intervals=config["targets_interval"]
+    log:
+        "{output_dir}/{sample}/{sample}_metrics.log"
+    shell:
+        """
+        gatk CollectAlignmentSummaryMetrics -R {input.ref} -I {input.bam} -O {output.alignment} 2>> {log}
+        gatk CollectInsertSizeMetrics -I {input.bam} -O {output.insert_metrics} \
+            -H {output.hist} 2>> {log}
+        gatk CollectHsMetrics -I {input.bam} -O {output.hs} \
+            -R {input.ref} -BAIT_INTERVALS {params.intervals} -TARGET_INTERVALS {params.intervals} 2>> {log}
+        """
+
+#Call somatic variants with mutect2
+rule mutect2_tumor_only:
+    input:
+        bam="{output_dir}/{sample}/{sample}_Corrected.bam",
+        bai="{output_dir}/{sample}/{sample}_Corrected.bam.bai",
+        ref=config["ref_genome"],
+        germline=config["germline_resource"]
+    output:
+        vcf=temp("{output_dir}/{sample}/{sample}_somatic.raw.vcf.gz"),
+        stats=("{output_dir}/{sample}/{sample}_somatic.raw.vcf.gz.stats")
+    log:
+        "{output_dir}/{sample}/{sample}_mutect2.log"
+    params:
+        bed=lambda wc: samples.loc[samples.SampleID == wc.sample, "BedfileName"].values[0],
+        # PoN file is optional but recommended 
+        pon_str=lambda wc: f"--panel-of-normals {config['panel_of_normals']}" if "panel_of_normals" in config else ""
+    shell:
+        """
+        gatk Mutect2 -R {input.ref} -I {input.bam} \
+            -O {output.vcf} \
+            -L {params.bed} \
+            --germline-resource {input.germline} \
+            {params.pon_str} \
+            2> {log}
+        """
+# GetPileupSummaries and CalculateContamination yet to be verified using a contanimated sample data
+#Run GetPileupSummaries to summarize read support for a set number of known variant sites.
+rule get_pileup_summaries:
+    input:
+        bam="{output_dir}/{sample}/{sample}_Corrected.bam",
+        known_sites=config["known_sites_for_contamination"]
+    output:
+        table=temp("{output_dir}/{sample}/{sample}_pileup_summaries.table")
+    log:
+        "{output_dir}/{sample}/{sample}_get_pileups.log"
+    params:
+        bed=lambda wc: samples.loc[samples.SampleID == wc.sample, "BedfileName"].values[0]
+    shell:
+        """
+        gatk GetPileupSummaries -I {input.bam} \
+            -V {input.known_sites} \
+            -L {params.bed} \
+            -O {output.table} 2> {log}
+        """
+
+#Estimate contamination with CalculateContamination.
+rule calculate_contamination:
+    input:
+        table="{output_dir}/{sample}/{sample}_pileup_summaries.table"
+    output:
+        table="{output_dir}/{sample}/{sample}_contamination.table"
+    log:
+        "{output_dir}/{sample}/{sample}_calc_contamination.log"
+    shell:
+        """
+        gatk CalculateContamination -I {input.table} -O {output.table} 2> {log}
+        """
+
+#Apply filters with FilterMutectCalls
+rule filter_mutect_calls:
+    input:
+        vcf="{output_dir}/{sample}/{sample}_somatic.raw.vcf.gz",
+        stats="{output_dir}/{sample}/{sample}_somatic.raw.vcf.gz.stats",
+        ref=config["ref_genome"],
+        contamination_table="{output_dir}/{sample}/{sample}_contamination.table"
+    output:
+        vcf="{output_dir}/{sample}/{sample}_somatic.filtered.vcf.gz" 
+    log:
+        "{output_dir}/{sample}/{sample}_filter_mutect.log"
+    shell:
+        """
+        gatk FilterMutectCalls -V {input.vcf} \
+            -R {input.ref} \
+            --contamination-table {input.contamination_table} \
+            -O {output.vcf} 2> {log}
+        """
+
+
